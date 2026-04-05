@@ -1,53 +1,94 @@
-#include <arpa/inet.h>
-#include <errno.h>
 #include <iostream>
+#include <netdb.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
-int main() {
-  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  if (sockfd == -1) {
-    std::cerr << "Problem while creation of the socket: " << strerror(errno)
-              << "\n";
-    return 1;
-  }
+class Server {
+private:
+  const char *port;
+  int socketfd;
+  addrinfo hints{}, *res{}, *p{};
 
-  sockaddr_in serverAddress{};
+public:
+  Server(const char *port) : port(port), socketfd(-1) {}
 
-  serverAddress.sin_family = AF_INET;
-  serverAddress.sin_port = htons(8080);
-  serverAddress.sin_addr.s_addr = INADDR_ANY;
+  bool setup() {
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
 
-  if (bind(sockfd, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) <
-      0) {
-    std::cerr << "three is some problem while binding: " << strerror(errno)
-              << "\n";
-    return 1;
-  }
-
-  if (listen(sockfd, 5) < 0) {
-
-    std::cerr << "three is some problem while listening: " << strerror(errno)
-              << "\n";
-    return 1;
-  }
-
-  while (true) {
-
-    sockaddr_in clientAddress{};
-    socklen_t client_len = sizeof(clientAddress);
-
-    int clientfd =
-        accept(sockfd, (struct sockaddr *)&clientAddress, &client_len);
-
-    if (clientfd < 0) {
-      std::cerr << "accept failed: " << strerror(errno) << "\n";
+    int status = getaddrinfo(NULL, port, &hints, &res);
+    if (status != 0) {
+      std::cerr << "Error in getaddrinfo: " << gai_strerror(status) << "\n";
+      return false;
     }
-    std::cout << "client connected" << "\n";
-    close(clientfd);
-  }
-  close(sockfd);
 
+    for (p = res; p != NULL; p = p->ai_next) {
+      socketfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+      if (socketfd == -1)
+        continue;
+
+      int yes = 1;
+      setsockopt(socketfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+
+      if (bind(socketfd, p->ai_addr, p->ai_addrlen) == -1) {
+        close(socketfd);
+        continue;
+      }
+
+      std::cout << "Chosen address family: " << p->ai_family << "\n";
+      break;
+    }
+
+    freeaddrinfo(res);
+
+    if (p == NULL) {
+      std::cerr << "Failed to bind\n";
+      return false;
+    }
+
+    if (listen(socketfd, 5) < 0) {
+      std::cerr << "Listen error: " << strerror(errno) << "\n";
+      return false;
+    }
+
+    return true;
+  }
+
+  void run() {
+    while (true) {
+      sockaddr_storage clientAddress{};
+      socklen_t client_len = sizeof(clientAddress);
+
+      int clientfd =
+          accept(socketfd, (struct sockaddr *)&clientAddress, &client_len);
+
+      if (clientfd < 0) {
+        std::cerr << "Accept failed: " << strerror(errno) << "\n";
+        continue;
+      }
+
+      std::cout << "Client connected\n";
+      close(clientfd);
+    }
+  }
+
+  ~Server() {
+    if (socketfd != -1) {
+      close(socketfd);
+    }
+  }
+};
+
+int main() {
+  Server server("8080");
+
+  if (!server.setup()) {
+    return 1;
+  }
+
+  server.run();
   return 0;
 }

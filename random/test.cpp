@@ -1,54 +1,51 @@
-// #include <arpa/inet.h>
-// #include <errno.h>
-// #include <iostream>
-// #include <string.h>
-// #include <sys/socket.h>
-// #include <unistd.h>
-//
-// int main() {
-//   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-//   if (sockfd == -1) {
-//     std::cerr << "Problem while creation of the socket: " << strerror(errno)
-//               << "\n";
-//     return 1;
-//   }
-//
-//   sockaddr_in serverAddress{};
-//
-//   serverAddress.sin_family = AF_INET;
-//   serverAddress.sin_port = htons(8080);
-//   serverAddress.sin_addr.s_addr = INADDR_ANY;
-//
-//   if (bind(sockfd, (struct sockaddr *)&serverAddress, sizeof(serverAddress))
-//   <
-//       0) {
-//     std::cerr << "three is some problem while binding: " << strerror(errno)
-//               << "\n";
-//     return 1;
-//   }
-//
-//   if (listen(sockfd, 5) < 0) {
-//
-//     std::cerr << "three is some problem while listening: " << strerror(errno)
-//               << "\n";
-//     return 1;
-//   }
-//
-//   while (true) {
-//
-//     sockaddr_in clientAddress{};
-//     socklen_t client_len = sizeof(clientAddress);
-//
-//     int clientfd =
-//         accept(sockfd, (struct sockaddr *)&clientAddress, &client_len);
-//
-//     if (clientfd < 0) {
-//       std::cerr << "accept failed: " << strerror(errno) << "\n";
-//     }
-//     std::cout << "client connected" << "\n";
-//     close(clientfd);
-//   }
-//   close(sockfd);
-//
-//   return 0;
-// }
+#include <iostream>
+#include <vector>
+
+struct WordAndPos {
+  std::vector<char> res = {};
+  int pos = 0;
+};
+
+WordAndPos parser(const std::string &str, int start) {
+  WordAndPos wp;
+  std::string target = "\r\n";
+  size_t delim_pos = str.find(target, start);
+
+  if (delim_pos == std::string::npos)
+    return wp;
+
+  for (size_t i = start; i < delim_pos; i++) {
+    wp.res.push_back(str[i]);
+  }
+
+  wp.pos = delim_pos + 2;
+  return wp;
+}
+
+int main() {
+  std::string str = "*2\r\n$4\r\nECHO\r\n";
+  WordAndPos wordAndPos;
+
+  // Keep parsing while we haven't reached the end of the string
+  while (wordAndPos.pos < static_cast<int>(str.length())) {
+    wordAndPos = parser(str, wordAndPos.pos);
+
+    // If parser returns empty (delimiter not found), we're done
+    if (wordAndPos.res.empty()) {
+      break;
+    }
+
+    // Print the extracted token
+    std::cout << "Token: ";
+    for (char c : wordAndPos.res) {
+      std::cout << c;
+    }
+    std::cout << "\n";
+  }
+  std::cout << "this is out of the loop" << "\n";
+  for (char c : wordAndPos.res) {
+    std::cout << c;
+  }
+
+  return 0;
+}

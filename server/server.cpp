@@ -78,13 +78,15 @@ void Server::run() {
         break;
       }
       buffer[bytes] = '\0';
-      buffer[strcspn(buffer, "\r\n")] = 0;
 
-      if (strcmp(buffer, "PING") == 0) {
-        strcpy(buffer, "PONG");
+      std::cout << "the string sent by the user is :" << buffer << "\n";
+
+      if (strcmp(buffer, "PING\r\n") == 0) {
+        char send_buffer[] = "+PONG\r\n";
+        send(clientfd, send_buffer, strlen(send_buffer), 0);
+      } else {
+        send(clientfd, buffer, strlen(buffer), 0);
       }
-
-      send(clientfd, buffer, sizeof(buffer), 0);
     }
 
     close(clientfd);

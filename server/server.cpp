@@ -1,9 +1,12 @@
 #include "server.h"
+#include "../command/commandHandler.h"
 #include <iostream>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+static const size_t kMaxLineLen = 4096;
 
 Server::Server() : socketfd(-1) {}
 
@@ -23,8 +26,8 @@ bool Server::setup() {
     if (socketfd == -1)
       continue;
 
-    int yes = 1;
-    setsockopt(socketfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    int val = 1;
+    setsockopt(socketfd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val));
 
     if (bind(socketfd, p->ai_addr, p->ai_addrlen) == -1) {
       close(socketfd);
@@ -49,7 +52,61 @@ bool Server::setup() {
   return true;
 }
 
+// void Server::run() {
+//   CommandHandler cw;
+//   while (true) {
+//     sockaddr_storage clientAddress{};
+//     socklen_t client_len = sizeof(clientAddress);
+//
+//     int clientfd =
+//         accept(socketfd, (struct sockaddr *)&clientAddress, &client_len);
+//
+//     if (clientfd < 0) {
+//       std::cerr << "Accept failed\n";
+//       continue;
+//     }
+//
+//     std::cout << "Client connected\n";
+//     const char *msg = "welcome to my world\n";
+//     send(clientfd, msg, strlen(msg), 0);
+//     // char buffer[1024];
+//     std::string buffer;
+//
+//     while (true) {
+//       buffer.resize(1024);
+//       // ssize_t bytes = recv(clientfd, buffer, sizeof(buffer) - 1, 0);
+//       ssize_t bytes = recv(clientfd, buffer.data(), buffer.size(), 0);
+//
+//       if (bytes <= 0) {
+//         std::cout << "Client disconnected\n";
+//         break;
+//       }
+//
+//       buffer.resize(bytes);
+//       // buffer[bytes] = '\0';
+//       std::cout << "the string sent by the user is :" << buffer << "\n";
+//
+//       // std::string input(buffer);
+//       const std::vector<std::string> &tokens = cw.parseCommand(buffer);
+//       const std::string output = cw.executeCommand(tokens);
+//
+//       const char *outStr = output.c_str();
+//       // send(clientfd, outStr, strlen(outStr), 0);
+//       send(clientfd, output.data(), output.size(), 0);
+//
+//       // if (strcmp(buffer, "PING\r\n") == 0) {
+//       //   char send_buffer[] = "+PONG\r\n";
+//       //   send(clientfd, send_buffer, strlen(send_buffer), 0);
+//       // } else {
+//       //   send(clientfd, buffer, strlen(buffer), 0);
+//       // }
+//     }
+//
+//     close(clientfd);
+//   }
+// }
 void Server::run() {
+  CommandHandler cw;
   while (true) {
     sockaddr_storage clientAddress{};
     socklen_t client_len = sizeof(clientAddress);
@@ -63,35 +120,57 @@ void Server::run() {
     }
 
     std::cout << "Client connected\n";
+    const char *welcome = "welcome to my world\n";
+    send(clientfd, welcome, strlen(welcome), 0);
 
-    const char *msg = "welcome to my world\n";
-
-    send(clientfd, msg, strlen(msg), 0);
-
-    char buffer[1024];
-
-    while (true) {
-      ssize_t bytes = recv(clientfd, buffer, sizeof(buffer) - 1, 0);
-
-      if (bytes <= 0) {
-        std::cout << "Client disconnected\n";
-        break;
-      }
-      buffer[bytes] = '\0';
-
-      std::cout << "the string sent by the user is :" << buffer << "\n";
-
-      if (strcmp(buffer, "PING\r\n") == 0) {
-        char send_buffer[] = "+PONG\r\n";
-        send(clientfd, send_buffer, strlen(send_buffer), 0);
-      } else {
-        send(clientfd, buffer, strlen(buffer), 0);
-      }
-    }
+    handleClient(clientfd, cw);
 
     close(clientfd);
   }
 }
+
+void Server::handleClient(int clientfd, CommandHandler &cw) {
+  std::string incoming;
+  char recvBuf[1024];
+
+  while (true) {
+    ssize_t bytes = recv(clientfd, recvBuf, sizeof(recvBuf), 0);
+
+    if (bytes <= 0) {
+      std::cout << "Client disconnected\n";
+      return;
+    }
+    incoming.append(recvBuf, bytes);
+
+    if (incoming.size() > kMaxLineLen) {
+      std::cerr << "Line too long, dropping client\n";
+      return;
+    }
+
+    processCompleteLines(incoming, clientfd, cw);
+  }
+}
+
+void Server::processCompleteLines(std::string &incoming, int clientfd,
+                                  CommandHandler &cw) {
+  size_t pos;
+
+  while ((pos = incoming.find('\n')) != std::string::npos) {
+    std::string line = incoming.substr(0, pos);
+    incoming.erase(0, pos + 1);
+
+    if (line.empty())
+      continue;
+
+    std::cout << "the string sent by the user is: " << line << "\n";
+
+    const std::vector<std::string> &tokens = cw.parseCommand(line);
+    const std::string output = cw.executeCommand(tokens);
+
+    send(clientfd, output.data(), output.size(), 0);
+  }
+}
+
 Server::~Server() {
   if (socketfd != -1) {
     close(socketfd);

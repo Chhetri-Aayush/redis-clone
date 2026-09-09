@@ -1,12 +1,12 @@
-#include "./commandHanlder.h"
+#include "./commandHandler.h"
 #include <sstream>
 #include <vector>
 
-CommandHanlder::CommandHanlder() {}
+CommandHandler::CommandHandler() {}
+CommandHandler::~CommandHandler() {}
 
-CommandHanlder::~CommandHanlder() {}
-
-std::vector<std::string> parseRespCommand(const std::string &input) {
+std::vector<std::string>
+CommandHandler::parseCommand(const std::string &input) {
   std::vector<std::string> tokens;
   if (input.empty())
     return tokens;
@@ -55,4 +55,15 @@ std::vector<std::string> parseRespCommand(const std::string &input) {
   }
 
   return tokens;
+}
+
+std::string
+CommandHandler::executeCommand(const std::vector<std::string> &tokens) {
+  if (tokens.size() == 0) {
+    return "-Err: empty command\r\n";
+  }
+
+  std::string cmd = tokens[0];
+
+  return "-Err: unknown command\r\r";
 }

@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-static const size_t kMaxLineLen = 4096;
+static const size_t MaxLineLen = 4096;
 
 Server::Server() : socketfd(-1) {}
 
@@ -130,7 +130,7 @@ void Server::run() {
 }
 
 void Server::handleClient(int clientfd, CommandHandler &cw) {
-  std::string incoming;
+  std::string input;
   char recvBuf[1024];
 
   while (true) {
@@ -140,34 +140,14 @@ void Server::handleClient(int clientfd, CommandHandler &cw) {
       std::cout << "Client disconnected\n";
       return;
     }
-    incoming.append(recvBuf, bytes);
+    input.append(recvBuf, bytes);
 
-    if (incoming.size() > kMaxLineLen) {
+    if (input.size() > MaxLineLen) {
       std::cerr << "Line too long, dropping client\n";
       return;
     }
 
-    processCompleteLines(incoming, clientfd, cw);
-  }
-}
-
-void Server::processCompleteLines(std::string &incoming, int clientfd,
-                                  CommandHandler &cw) {
-  size_t pos;
-
-  while ((pos = incoming.find('\n')) != std::string::npos) {
-    std::string line = incoming.substr(0, pos);
-    incoming.erase(0, pos + 1);
-
-    if (line.empty())
-      continue;
-
-    std::cout << "the string sent by the user is: " << line << "\n";
-
-    const std::vector<std::string> &tokens = cw.parseCommand(line);
-    const std::string output = cw.executeCommand(tokens);
-
-    send(clientfd, output.data(), output.size(), 0);
+    cw.processClientInput(input, clientfd);
   }
 }
 

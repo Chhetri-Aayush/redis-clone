@@ -11,8 +11,8 @@ private:
   int socketfd;
   addrinfo hints{}, *res{}, *p{};
   void handleClient(int clientfd, CommandHandler &cw);
-  void processCompleteLines(std::string &incoming, int clientfd,
-                            CommandHandler &cw);
+  void processClientInput(std::string &incoming, int clientfd,
+                          CommandHandler &cw);
 
 public:
   Server();

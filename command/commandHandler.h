@@ -9,8 +9,9 @@ public:
   CommandHandler();
   ~CommandHandler();
 
-  std::vector<std::string> parseCommand(const std::string &input);
+  bool parseCommand(std::string &input, std::vector<std::string> &tokens);
   std::string executeCommand(const std::vector<std::string> &tokens);
+  void processClientInput(std::string &incoming, int clientfd);
 };
 
 #endif

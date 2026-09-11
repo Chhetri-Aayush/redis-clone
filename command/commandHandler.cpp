@@ -1,10 +1,39 @@
 #include "./commandHandler.h"
+#include "../db/database.h"
 #include <iostream>
 #include <sys/socket.h>
 #include <vector>
 
-static const size_t MaxRequestLen = 4096;
-static const int MaxArguments = 128;
+namespace {
+
+const size_t MaxRequestLen = 4096;
+const int MaxArguments = 128;
+
+Database db;
+
+std::string handlePing(const std::vector<std::string> &tokens) {
+  return "+PONG\r\n";
+}
+
+std::string handleSET(const std::vector<std::string> &tokens) {
+  if (tokens.size() < 3)
+    return "-Err:SET requires key and value\r\r";
+  return db.set(tokens[1], tokens[2]);
+}
+
+std::string handleGET(const std::vector<std::string> &tokens) {
+  if (tokens.size() < 2)
+    return "-ERR GET requires a key\r\n";
+
+  std::string value;
+  if (!db.get(tokens[1], value)) {
+    return "$-1\r\n";
+  }
+
+  return "$" + std::to_string(value.size()) + "\r\n" + value + "\r\n";
+}
+
+} // namespace
 
 CommandHandler::CommandHandler() {}
 CommandHandler::~CommandHandler() {}
@@ -173,22 +202,34 @@ CommandHandler::executeCommand(const std::vector<std::string> &tokens) {
   }
 
   std::string cmd = tokens[0];
-
-  return "-Err: unknown command\r\r";
+  if (cmd == "PING") {
+    return handlePing(tokens);
+  } else if (cmd == "SET") {
+    return handleSET(tokens);
+  } else if (cmd == "GET") {
+    return handleGET(tokens);
+  } else {
+    return "-Err: unknown command\r\n";
+  }
 }
 
-void CommandHandler::processClientInput(std::string &incoming, int clientfd) {
+void CommandHandler::processClientInput(std::string &input, int clientfd) {
   while (true) {
     std::vector<std::string> tokens;
-    bool complete = parseCommand(incoming, tokens);
+    bool complete = parseCommand(input, tokens);
 
     if (!complete) {
+      // std::cout << " the message is not complete will try again whne the new
+      // "
+      //              "message arrives and the command is actually there  "
+      //           << "\n";
+      // std::cout << " so far the incoming consist of " << input << "\n";
       return;
     }
-    std::cout << "Command received:\n";
-    for (const auto &token : tokens) {
-      std::cout << "  [" << token << "]\n";
-    }
+    // std::cout << "Command received:\n";
+    // for (const auto &token : tokens) {
+    //   std::cout << "  [" << token << "]\n";
+    // }
     const std::string output = executeCommand(tokens);
     ssize_t sent = send(clientfd, output.data(), output.size(), 0);
 

@@ -49,6 +49,8 @@ bool Server::setup() {
     return false;
   }
 
+  std::cout << " the setup is good and we are procedding to the run"
+            << std::endl;
   return true;
 }
 
@@ -123,13 +125,13 @@ void Server::run() {
     const char *welcome = "welcome to my world\n";
     send(clientfd, welcome, strlen(welcome), 0);
 
-    handleClient(clientfd, cw);
+    handleClientInput(clientfd, cw);
 
     close(clientfd);
   }
 }
 
-void Server::handleClient(int clientfd, CommandHandler &cw) {
+void Server::handleClientInput(int clientfd, CommandHandler &cw) {
   std::string input;
   char recvBuf[1024];
 

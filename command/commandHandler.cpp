@@ -17,7 +17,7 @@ std::string handlePing(const std::vector<std::string> &tokens) {
 
 std::string handleSET(const std::vector<std::string> &tokens) {
   if (tokens.size() < 3)
-    return "-Err:SET requires key and value\r\r";
+    return "-Err:SET requires key and value\r\n";
   return db.set(tokens[1], tokens[2]);
 }
 
@@ -26,11 +26,49 @@ std::string handleGET(const std::vector<std::string> &tokens) {
     return "-ERR GET requires a key\r\n";
 
   std::string value;
-  if (!db.get(tokens[1], value)) {
-    return "$-1\r\n";
-  }
+  ReturnState state = db.get(tokens[1], value);
 
-  return "$" + std::to_string(value.size()) + "\r\n" + value + "\r\n";
+  switch (state) {
+  case ReturnState::Success:
+    return "$" + std::to_string(value.size()) + "\r\n" + value + "\r\n";
+  case ReturnState::NotFound:
+    return "$-1\r\n";
+  case ReturnState::WrongType:
+    return "-WRONGTYPE Operation against a key holding the wrong kind of "
+           "value\r\n";
+  default:
+    return "-ERR unknown error\r\n";
+  }
+}
+
+std::string handleDEL(const std::vector<std::string> &tokens) {
+  if (tokens.size() < 2)
+    return "-ERR wrong number of arguments for 'del' command\r\n";
+
+  ReturnState state = db.del(tokens[1]);
+  switch (state) {
+  case ReturnState::Success:
+    return ":1\r\n";
+  case ReturnState::NotFound:
+    return ":0\r\n";
+  default:
+    return "-ERR unknown error\r\n";
+  }
+}
+
+std::string handleEXIST(const std::vector<std::string> &tokens) {
+  if (tokens.size() < 2)
+    return "-ERR wrong number of arguments for 'exists' command\r\n";
+
+  ReturnState state = db.exist(tokens[1]);
+  switch (state) {
+  case ReturnState::Success:
+    return ":1\r\n";
+  case ReturnState::NotFound:
+    return ":0\r\n";
+  default:
+    return "-ERR unknown error\r\n";
+  }
 }
 
 } // namespace
@@ -208,6 +246,10 @@ CommandHandler::executeCommand(const std::vector<std::string> &tokens) {
     return handleSET(tokens);
   } else if (cmd == "GET") {
     return handleGET(tokens);
+  } else if (cmd == "EXIST") {
+    return handleEXIST(tokens);
+  } else if (cmd == "DEL") {
+    return handleDEL(tokens);
   } else {
     return "-Err: unknown command\r\n";
   }

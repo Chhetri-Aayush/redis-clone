@@ -41,16 +41,51 @@ std::string Database::set(const std::string &key, const std::string &value) {
   return "+OK\r\r";
 }
 
-bool Database::get(const std::string &key, std::string &value) {
+// bool Database::get(const std::string &key, std::string &value) {
+//   auto it = kv.find(key);
+//   if (it == kv.end()) {
+//     return false;
+//   }
+//
+//   if (!it->second.isString()) {
+//     return false;
+//   }
+//
+//   value = it->second.asString();
+//   return true;
+// }
+ReturnState Database::get(const std::string &key, std::string &value) {
   auto it = kv.find(key);
+
   if (it == kv.end()) {
-    return false;
+    return ReturnState::NotFound;
   }
 
   if (!it->second.isString()) {
-    return false;
+    return ReturnState::WrongType;
   }
 
   value = it->second.asString();
-  return true;
+  return ReturnState::Success;
+}
+
+ReturnState Database::del(const std::string &key) {
+  auto it = kv.find(key);
+
+  if (it == kv.end()) {
+    return ReturnState::NotFound;
+  }
+
+  kv.erase(it);
+  return ReturnState::Success;
+}
+
+ReturnState Database::exist(const std::string &key) {
+  auto it = kv.find(key);
+
+  if (it == kv.end()) {
+    return ReturnState::NotFound;
+  }
+
+  return ReturnState::Success;
 }

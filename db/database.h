@@ -7,6 +7,8 @@
 #include <variant>
 #include <vector>
 
+enum class ReturnState { Success, NotFound, WrongType };
+
 class CompositeValue {
 private:
   std::variant<std::string, std::vector<std::string>,
@@ -36,8 +38,18 @@ private:
   std::unordered_map<std::string, CompositeValue> kv;
 
 public:
+  // common
+  ReturnState del(const std::string &key);
+  ReturnState exist(const std::string &key);
+  // string
   std::string set(const std::string &key, const std::string &value);
-  bool get(const std::string &key, std::string &value);
+  ReturnState get(const std::string &key, std::string &value);
+  ReturnState incr(const std::string &key);
+  ReturnState decr(const std::string &key);
+
+  // list
+  //
+  // set
 };
 
 #endif

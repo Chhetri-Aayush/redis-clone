@@ -18,7 +18,18 @@ std::string handlePing(const std::vector<std::string> &tokens) {
 std::string handleSET(const std::vector<std::string> &tokens) {
   if (tokens.size() < 3)
     return "-Err:SET requires key and value\r\n";
-  return db.set(tokens[1], tokens[2]);
+  // return db.set(tokens[1], tokens[2]);
+  ReturnState state = db.set(tokens[1], tokens[2]);
+
+  switch (state) {
+  case ReturnState::Success:
+    return "+OK\r\n";
+  // case ReturnState::WrongType:
+  //   return "-WRONGTYPE Operation against a key holding the wrong kind of "
+  //          "value\r\n";
+  default:
+    return "-ERR unknown error\r\n";
+  }
 }
 
 std::string handleGET(const std::vector<std::string> &tokens) {

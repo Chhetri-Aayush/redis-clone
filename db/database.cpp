@@ -56,7 +56,9 @@ bool Database::isExpired(const std::string &key) {
 // redis command methods
 ReturnState Database::set(const std::string &key, const std::string &value) {
   // kv[key] = CompositeValue(value);
-  kv[key] = StoredValue{CompositeValue(value), false, TimePoint{}};
+  // kv[key] = StoredValue{CompositeValue(value), false, TimePoint{}};
+  kv.insert_or_assign(key,
+                      StoredValue{CompositeValue(value), false, TimePoint{}});
   return ReturnState::Success;
 }
 
@@ -66,8 +68,12 @@ ReturnState Database::set(const std::string &key, const std::string &value,
     return ReturnState::InvalidValue;
   }
 
-  kv[key] = StoredValue{CompositeValue(value), true,
-                        Clock::now() + std::chrono::seconds(ttlSeconds)};
+  kv.insert_or_assign(
+      key, StoredValue{CompositeValue(value), true,
+                       Clock::now() + std::chrono::seconds(ttlSeconds)});
+
+  // kv[key] = StoredValue{CompositeValue(value), true,
+  //                       Clock::now() + std::chrono::seconds(ttlSeconds)};
   return ReturnState::Success;
 }
 
@@ -182,8 +188,9 @@ ReturnState Database::incr(const std::string &key) {
 
   auto it = kv.find(key);
   if (it == kv.end()) {
-    kv[key] = StoredValue{CompositeValue("1"), false, TimePoint{}};
-
+    // kv[key] = StoredValue{CompositeValue("1"), false, TimePoint{}};
+    kv.insert_or_assign(key,
+                        StoredValue{CompositeValue("1"), false, TimePoint{}});
     return ReturnState::Success;
   }
 
@@ -210,8 +217,9 @@ ReturnState Database::decr(const std::string &key) {
 
   auto it = kv.find(key);
   if (it == kv.end()) {
-    kv[key] = StoredValue{CompositeValue("-1"), false, TimePoint{}};
-
+    // kv[key] = StoredValue{CompositeValue("-1"), false, TimePoint{}};
+    kv.insert_or_assign(key,
+                        StoredValue{CompositeValue("-1"), false, TimePoint{}});
     return ReturnState::Success;
   }
 
@@ -239,7 +247,9 @@ ReturnState Database::lpush(const std::string &key, const std::string &value) {
   if (it == kv.end()) {
     std::vector<std::string> list;
     list.push_back(value);
-    kv[key] = StoredValue{CompositeValue(list), false, TimePoint{}};
+    kv.insert_or_assign(key,
+                        StoredValue{CompositeValue(list), false, TimePoint{}});
+    // kv[key] = StoredValue{CompositeValue(list), false, TimePoint{}};
     return ReturnState::Success;
   }
 
@@ -261,7 +271,9 @@ ReturnState Database::rpush(const std::string &key, const std::string &value) {
     std::vector<std::string> list;
     list.push_back(value);
 
-    kv[key] = StoredValue{CompositeValue(list), false, TimePoint{}};
+    kv.insert_or_assign(key,
+                        StoredValue{CompositeValue(list), false, TimePoint{}});
+    // kv[key] = StoredValue{CompositeValue(list), false, TimePoint{}};
 
     return ReturnState::Success;
   }
@@ -333,8 +345,9 @@ ReturnState Database::sadd(const std::string &key, const std::string &value) {
     std::unordered_set<std::string> set;
     set.insert(value);
 
-    kv[key] = StoredValue{CompositeValue(set), false, TimePoint{}};
-
+    kv.insert_or_assign(key,
+                        StoredValue{CompositeValue(set), false, TimePoint{}});
+    // kv[key] = StoredValue{CompositeValue(set), false, TimePoint{}};
     return ReturnState::Success;
   }
 

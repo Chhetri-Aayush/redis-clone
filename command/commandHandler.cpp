@@ -16,25 +16,60 @@ std::string handlePing(const std::vector<std::string> &tokens) {
 }
 
 std::string handleSET(const std::vector<std::string> &tokens) {
-  if (tokens.size() < 3)
-    return "-Err:SET requires key and value\r\n";
-  // return db.set(tokens[1], tokens[2]);
-  ReturnState state = db.set(tokens[1], tokens[2]);
+  if (tokens.size() != 3 && tokens.size() != 5) {
+    return "-ERR wrong number of arguments for 'set' command\r\n";
+  }
+  const std::string &key = tokens[1];
+  const std::string &value = tokens[2];
+
+  if (tokens.size() == 3) {
+    ReturnState state = db.set(key, value);
+
+    switch (state) {
+    case ReturnState::Success:
+      return "+OK\r\n";
+
+    default:
+      return "-ERR unknown error\r\n";
+    }
+  }
+  const std::string &option = tokens[3];
+  const std::string &ttlString = tokens[4];
+
+  if (option != "EX") {
+    return "-ERR syntax error\r\n";
+  }
+  std::int64_t ttlSeconds;
+
+  try {
+    std::size_t pos = 0;
+    ttlSeconds = std::stoll(ttlString, &pos);
+
+    if (pos != ttlString.size()) {
+      return "-ERR invalid expire time\r\n";
+    }
+
+  } catch (const std::exception &) {
+    return "-ERR invalid expire time\r\n";
+  }
+
+  ReturnState state = db.set(key, value, ttlSeconds);
 
   switch (state) {
   case ReturnState::Success:
     return "+OK\r\n";
-  // case ReturnState::WrongType:
-  //   return "-WRONGTYPE Operation against a key holding the wrong kind of "
-  //          "value\r\n";
+
+  case ReturnState::InvalidValue:
+    return "-ERR invalid expire time\r\n";
+
   default:
     return "-ERR unknown error\r\n";
   }
 }
 
 std::string handleGET(const std::vector<std::string> &tokens) {
-  if (tokens.size() < 2)
-    return "-ERR GET requires a key\r\n";
+  if (tokens.size() != 2)
+    return "-ERR wrong number of arguments for GET command";
 
   std::string value;
   ReturnState state = db.get(tokens[1], value);
@@ -53,8 +88,8 @@ std::string handleGET(const std::vector<std::string> &tokens) {
 }
 
 std::string handleDEL(const std::vector<std::string> &tokens) {
-  if (tokens.size() < 2)
-    return "-ERR wrong number of arguments for 'del' command\r\n";
+  if (tokens.size() != 2)
+    return "-ERR wrong number of arguments for 'DEL' command\r\n";
 
   ReturnState state = db.del(tokens[1]);
   switch (state) {
@@ -68,8 +103,8 @@ std::string handleDEL(const std::vector<std::string> &tokens) {
 }
 
 std::string handleEXIST(const std::vector<std::string> &tokens) {
-  if (tokens.size() < 2)
-    return "-ERR wrong number of arguments for 'exists' command\r\n";
+  if (tokens.size() != 2)
+    return "-ERR wrong number of arguments for 'EXIST' command\r\n";
 
   ReturnState state = db.exist(tokens[1]);
   switch (state) {
@@ -77,6 +112,234 @@ std::string handleEXIST(const std::vector<std::string> &tokens) {
     return ":1\r\n";
   case ReturnState::NotFound:
     return ":0\r\n";
+  default:
+    return "-ERR unknown error\r\n";
+  }
+}
+
+std::string handleEXPIRE(const std::vector<std::string> &tokens) {
+  if (tokens.size() != 3) {
+    return "-ERR wrong number of arguments for 'expire' command\r\n";
+  }
+  std::int64_t seconds;
+
+  try {
+    std::size_t pos = 0;
+    seconds = std::stoll(tokens[2], &pos);
+
+    if (pos != tokens[2].size()) {
+      return "-ERR value is not an integer or out of range\r\n";
+    }
+
+  } catch (...) {
+    return "-ERR value is not an integer or out of range\r\n";
+  }
+
+  ReturnState state = db.expire(tokens[1], seconds);
+
+  switch (state) {
+  case ReturnState::Success:
+    return ":1\r\n";
+
+  case ReturnState::NotFound:
+    return ":0\r\n";
+
+  default:
+    return "-ERR unknown error\r\n";
+  }
+}
+
+std::string handleTTL(const std::vector<std::string> &tokens) {
+  if (tokens.size() != 2) {
+    return "-ERR wrong number of arguments for 'ttl' command\r\n";
+  }
+  std::int64_t ttl = db.ttl(tokens[1]);
+  return ":" + std::to_string(ttl) + "\r\n";
+}
+
+std::string handleINCR(const std::vector<std::string> &tokens) {
+  if (tokens.size() != 2) {
+    return "-ERR wrong number of arguments for 'incr' command\r\n";
+  }
+
+  ReturnState state = db.incr(tokens[1]);
+
+  switch (state) {
+  case ReturnState::Success:
+    return "+OK\r\n";
+
+  case ReturnState::NotFound:
+    return ":1\r\n";
+
+  case ReturnState::WrongType:
+    return "-WRONGTYPE Operation against a key holding the wrong kind of "
+           "value\r\n";
+
+  case ReturnState::InvalidValue:
+    return "-ERR value is not an integer or out of range\r\n";
+
+  default:
+    return "-ERR unknown error\r\n";
+  }
+}
+
+std::string handleDECR(const std::vector<std::string> &tokens) {
+  if (tokens.size() != 2) {
+    return "-ERR wrong number of arguments for 'decr' command\r\n";
+  }
+
+  ReturnState state = db.decr(tokens[1]);
+
+  switch (state) {
+  case ReturnState::Success:
+    return "+OK\r\n";
+
+  case ReturnState::NotFound:
+    return ":-1\r\n";
+
+  case ReturnState::WrongType:
+    return "-WRONGTYPE Operation against a key holding the wrong kind of "
+           "value\r\n";
+
+  case ReturnState::InvalidValue:
+    return "-ERR value is not an integer or out of range\r\n";
+
+  default:
+    return "-ERR unknown error\r\n";
+  }
+}
+
+std::string handleLPUSH(const std::vector<std::string> &tokens) {
+  if (tokens.size() != 3) {
+    return "-ERR wrong number of arguments for 'lpush' command\r\n";
+  }
+
+  ReturnState state = db.lpush(tokens[1], tokens[2]);
+
+  switch (state) {
+  case ReturnState::Success:
+    return "+OK\r\n";
+
+  case ReturnState::WrongType:
+    return "-WRONGTYPE Operation against a key holding the wrong kind of "
+           "value\r\n";
+
+  default:
+    return "-ERR unknown error\r\n";
+  }
+}
+
+std::string handleRPUSH(const std::vector<std::string> &tokens) {
+  if (tokens.size() != 3) {
+    return "-ERR wrong number of arguments for 'rpush' command\r\n";
+  }
+  ReturnState state = db.rpush(tokens[1], tokens[2]);
+
+  switch (state) {
+  case ReturnState::Success:
+    return "+OK\r\n";
+
+  case ReturnState::WrongType:
+    return "-WRONGTYPE Operation against a key holding the wrong kind of "
+           "value\r\n";
+
+  default:
+    return "-ERR unknown error\r\n";
+  }
+}
+
+std::string handleLRANGE(const std::vector<std::string> &tokens) {
+  if (tokens.size() != 4) {
+    return "-ERR wrong number of arguments for 'lrange' command\r\n";
+  }
+  std::int64_t start;
+  std::int64_t end;
+
+  try {
+    std::size_t pos = 0;
+    start = std::stoll(tokens[2], &pos);
+
+    if (pos != tokens[2].size()) {
+      return "-ERR value is not an integer or out of range\r\n";
+    }
+
+    pos = 0;
+    end = std::stoll(tokens[3], &pos);
+
+    if (pos != tokens[3].size()) {
+      return "-ERR value is not an integer or out of range\r\n";
+    }
+
+  } catch (...) {
+    return "-ERR value is not an integer or out of range\r\n";
+  }
+
+  std::vector<std::string> values;
+  ReturnState state = db.lrange(tokens[1], start, end, values);
+
+  switch (state) {
+  case ReturnState::Success: {
+    std::string response = "*" + std::to_string(values.size()) + "\r\n";
+
+    for (const auto &value : values) {
+      response += "$" + std::to_string(value.size()) + "\r\n";
+      response += value;
+      response += "\r\n";
+    }
+
+    return response;
+  }
+
+  case ReturnState::NotFound:
+    return "*0\r\n";
+
+  case ReturnState::WrongType:
+    return "-WRONGTYPE Operation against a key holding the wrong kind of "
+           "value\r\n";
+
+  default:
+    return "-ERR unknown error\r\n";
+  }
+}
+
+std::string handleSADD(const std::vector<std::string> &tokens) {
+  if (tokens.size() != 3) {
+    return "-ERR wrong number of arguments for 'sadd' command\r\n";
+  }
+
+  ReturnState state = db.sadd(tokens[1], tokens[2]);
+
+  switch (state) {
+  case ReturnState::Success:
+    return "+OK\r\n";
+
+  case ReturnState::WrongType:
+    return "-WRONGTYPE Operation against a key holding the wrong kind of "
+           "value\r\n";
+
+  default:
+    return "-ERR unknown error\r\n";
+  }
+}
+
+std::string handleSREM(const std::vector<std::string> &tokens) {
+  if (tokens.size() != 3) {
+    return "-ERR wrong number of arguments for 'srem' command\r\n";
+  }
+
+  ReturnState state = db.srem(tokens[1], tokens[2]);
+
+  switch (state) {
+  case ReturnState::Success:
+    return "+OK\r\n";
+
+  case ReturnState::NotFound:
+    return ":0\r\n";
+
+  case ReturnState::WrongType:
+    return "-WRONGTYPE Operation against a key holding the wrong kind of "
+           "value\r\n";
+
   default:
     return "-ERR unknown error\r\n";
   }
@@ -261,6 +524,24 @@ CommandHandler::executeCommand(const std::vector<std::string> &tokens) {
     return handleEXIST(tokens);
   } else if (cmd == "DEL") {
     return handleDEL(tokens);
+  } else if (cmd == "EXPIRE") {
+    return handleEXPIRE(tokens);
+  } else if (cmd == "TTL") {
+    return handleTTL(tokens);
+  } else if (cmd == "INCR") {
+    return handleINCR(tokens);
+  } else if (cmd == "DECR") {
+    return handleDECR(tokens);
+  } else if (cmd == "LPUSH") {
+    return handleLPUSH(tokens);
+  } else if (cmd == "RPUSH") {
+    return handleRPUSH(tokens);
+  } else if (cmd == "LRANGE") {
+    return handleLRANGE(tokens);
+  } else if (cmd == "SADD") {
+    return handleSADD(tokens);
+  } else if (cmd == "SREM") {
+    return handleSREM(tokens);
   } else {
     return "-Err: unknown command\r\n";
   }

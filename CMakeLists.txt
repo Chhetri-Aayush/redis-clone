@@ -8,4 +8,5 @@ add_executable(redis
 main.cpp
 server/server.cpp
 command/commandHandler.cpp
+db/database.cpp
 )

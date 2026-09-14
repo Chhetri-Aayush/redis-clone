@@ -122,8 +122,8 @@ void Server::run() {
     }
 
     std::cout << "Client connected\n";
-    const char *welcome = "welcome to my world\n";
-    send(clientfd, welcome, strlen(welcome), 0);
+    // const char *welcome = "welcome to my world\n";
+    // send(clientfd, welcome, strlen(welcome), 0);
 
     handleClientInput(clientfd, cw);
 

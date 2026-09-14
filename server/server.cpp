@@ -51,6 +51,8 @@ bool Server::setup() {
 
   std::cout << " the setup is good and we are procedding to the run"
             << std::endl;
+
+  // cw.loadPersistedData();
   return true;
 }
 

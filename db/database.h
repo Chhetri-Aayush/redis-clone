@@ -29,6 +29,8 @@ public:
   bool isSet() const;
   bool isMap() const;
 
+  std::size_t typeIndex() const { return value.index(); }
+
   std::string &asString();
   std::vector<std::string> &asList();
   std::unordered_set<std::string> &asSet();
@@ -70,6 +72,9 @@ public:
   // set
   ReturnState sadd(const std::string &key, const std::string &value);
   ReturnState srem(const std::string &key, const std::string &value);
+  // persistence
+  bool saveToDisk(const std::string &path);
+  bool loadFromDisk(const std::string &path);
 };
 
 #endif

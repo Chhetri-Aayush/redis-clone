@@ -1,4 +1,23 @@
 #include "./database.h"
+#include <fstream>
+
+namespace {
+void writeString(std::ofstream &out, const std::string &s) {
+  uint32_t len = static_cast<uint32_t>(s.size());
+  out.write(reinterpret_cast<const char *>(&len), sizeof(len));
+  if (len)
+    out.write(s.data(), len);
+}
+
+std::string readString(std::ifstream &in) {
+  uint32_t len = 0;
+  in.read(reinterpret_cast<char *>(&len), sizeof(len));
+  std::string s(len, '\0');
+  if (len)
+    in.read(&s[0], len);
+  return s;
+}
+} // namespace
 
 // mixed data structure methods
 CompositeValue::CompositeValue(const std::string &str) : value(str) {}
@@ -380,4 +399,157 @@ ReturnState Database::srem(const std::string &key, const std::string &value) {
   set.erase(value);
 
   return ReturnState::Success;
+}
+
+bool Database::saveToDisk(const std::string &path) {
+  std::ofstream out(path, std::ios::binary | std::ios::trunc);
+  if (!out)
+    return false;
+
+  uint32_t written = 0;
+  auto countPos = out.tellp();
+  out.write(reinterpret_cast<char *>(&written), sizeof(written));
+
+  auto now = Clock::now();
+
+  for (auto &[key, stored] : kv) {
+    if (stored.hasTTL && now >= stored.expiresAt) {
+      continue;
+    }
+
+    writeString(out, key);
+
+    uint8_t typeTag = static_cast<uint8_t>(stored.data.typeIndex());
+    out.write(reinterpret_cast<char *>(&typeTag), sizeof(typeTag));
+
+    int64_t remaining = -1;
+    if (stored.hasTTL) {
+      remaining = std::chrono::duration_cast<std::chrono::seconds>(
+                      stored.expiresAt - now)
+                      .count();
+    }
+    out.write(reinterpret_cast<char *>(&remaining), sizeof(remaining));
+
+    switch (stored.data.typeIndex()) {
+    case 0: {
+      writeString(out, stored.data.asString());
+      break;
+    }
+    case 1: {
+      auto &list = stored.data.asList();
+      uint32_t n = static_cast<uint32_t>(list.size());
+      out.write(reinterpret_cast<char *>(&n), sizeof(n));
+      for (auto &item : list)
+        writeString(out, item);
+      break;
+    }
+    case 2: {
+      auto &set = stored.data.asSet();
+      uint32_t n = static_cast<uint32_t>(set.size());
+      out.write(reinterpret_cast<char *>(&n), sizeof(n));
+      for (auto &item : set)
+        writeString(out, item);
+      break;
+    }
+    case 3: {
+      auto &map = stored.data.asMap();
+      uint32_t n = static_cast<uint32_t>(map.size());
+      out.write(reinterpret_cast<char *>(&n), sizeof(n));
+      for (auto &[k, v] : map) {
+        writeString(out, k);
+        writeString(out, v);
+      }
+      break;
+    }
+    }
+
+    written++;
+  }
+
+  auto endPos = out.tellp();
+  out.seekp(countPos);
+  out.write(reinterpret_cast<char *>(&written), sizeof(written));
+  out.seekp(endPos);
+
+  return static_cast<bool>(out);
+}
+
+bool Database::loadFromDisk(const std::string &path) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in)
+    return false;
+
+  uint32_t count = 0;
+  in.read(reinterpret_cast<char *>(&count), sizeof(count));
+  if (!in)
+    return false;
+
+  for (uint32_t i = 0; i < count && in; i++) {
+    std::string key = readString(in);
+
+    uint8_t typeTag = 0;
+    in.read(reinterpret_cast<char *>(&typeTag), sizeof(typeTag));
+
+    int64_t remaining = -1;
+    in.read(reinterpret_cast<char *>(&remaining), sizeof(remaining));
+
+    switch (typeTag) {
+    case 0: {
+      std::string val = readString(in);
+      kv.insert_or_assign(key,
+                          StoredValue{CompositeValue(val), false, TimePoint{}});
+      break;
+    }
+    case 1: {
+      uint32_t n = 0;
+      in.read(reinterpret_cast<char *>(&n), sizeof(n));
+      std::vector<std::string> list;
+      list.reserve(n);
+      for (uint32_t j = 0; j < n; j++)
+        list.push_back(readString(in));
+      kv.insert_or_assign(
+          key, StoredValue{CompositeValue(list), false, TimePoint{}});
+      break;
+    }
+    case 2: {
+      uint32_t n = 0;
+      in.read(reinterpret_cast<char *>(&n), sizeof(n));
+      std::unordered_set<std::string> set;
+      for (uint32_t j = 0; j < n; j++)
+        set.insert(readString(in));
+      kv.insert_or_assign(key,
+                          StoredValue{CompositeValue(set), false, TimePoint{}});
+      break;
+    }
+    case 3: {
+      uint32_t n = 0;
+      in.read(reinterpret_cast<char *>(&n), sizeof(n));
+      std::unordered_map<std::string, std::string> map;
+      for (uint32_t j = 0; j < n; j++) {
+        std::string k = readString(in);
+        std::string v = readString(in);
+        map[k] = v;
+      }
+      kv.insert_or_assign(key,
+                          StoredValue{CompositeValue(map), false, TimePoint{}});
+      break;
+    }
+    default:
+      return false;
+    }
+
+    // if (remaining >= 0) {
+    //   kv[key].hasTTL = true;
+    //   kv[key].expiresAt = Clock::now() + std::chrono::seconds(remaining);
+    // }
+    if (remaining >= 0) {
+      auto it = kv.find(key);
+      if (it != kv.end()) {
+        it->second.hasTTL = true;
+        it->second.expiresAt = Clock::now() + std::chrono::seconds(remaining);
+      }
+    }
+  }
+
+  return true;
 }

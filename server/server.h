@@ -10,12 +10,14 @@ private:
   static constexpr const char *port{"8080"};
   int socketfd;
   addrinfo hints{}, *res{}, *p{};
+  CommandHandler cw;
   void handleClientInput(int clientfd, CommandHandler &cw);
 
 public:
   Server();
   bool setup();
   void run();
+  // CommandHandler &getCommandHandler() { return cw; }
 
   ~Server();
 };
